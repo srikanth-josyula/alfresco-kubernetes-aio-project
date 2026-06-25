@@ -1,0 +1,173 @@
+Got it — you want the XHR call to fire automatically when the Aikau page loads, not via a button. That’s the correct production pattern.
+
+In Aikau, you don’t “run code on load” directly in most OOTB widgets — you publish an event immediately when the page initializes.
+
+Here’s the clean end-to-end way.
+
+⸻
+
+✅ Goal (on page load)
+
+* Page loads
+* XHR automatically calls Web Script
+* Response is shown in label
+
+⸻
+
+🔥 1. Web Script (same as before)
+
+Call it:
+
+/share/proxy/alfresco/com/example/demo/get-message
+
+Returns:
+
+{ "message": "hello world" }
+
+⸻
+
+⚙️ 2. Aikau Page (AUTO LOAD VERSION)
+
+This is the key part.
+
+✅ Full page model
+
+model.jsonModel = {
+  services: [
+    {
+      name: "alfresco/services/Xhr",
+      config: {
+        subscriptions: [
+          {
+            topic: "PAGE_LOAD",
+            url: "proxy/alfresco/com/example/demo/get-message",
+            method: "GET",
+            successTopic: "MESSAGE_RECEIVED"
+          }
+        ]
+      }
+    }
+  ],
+  widgets: [
+    {
+      name: "alfresco/layout/VerticalWidgets",
+      config: {
+        widgets: [
+          {
+            name: "alfresco/services/LoggingService"
+          },
+          // 👇 THIS triggers automatically on page load
+          {
+            name: "alfresco/services/PublishService",
+            config: {
+              publishTopic: "PAGE_LOAD"
+            }
+          },
+          // 👇 UI display
+          {
+            name: "alfresco/html/Label",
+            config: {
+              label: "Loading...",
+              subscriptionTopic: "MESSAGE_RECEIVED",
+              renderFilter: [
+                {
+                  property: "message",
+                  values: [""],
+                  negate: true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+};
+
+⸻
+
+🧠 How it works (important)
+
+1. Page loads
+
+Aikau initializes all widgets
+
+⸻
+
+2. This runs immediately
+
+PublishService → PAGE_LOAD
+
+⸻
+
+3. XHR service catches it
+
+PAGE_LOAD → calls Web Script
+
+⸻
+
+4. Response comes back
+
+{ "message": "hello world" }
+
+⸻
+
+5. Event published
+
+MESSAGE_RECEIVED
+
+⸻
+
+6. Label updates automatically
+
+⸻
+
+⚠️ Key mistake people make
+
+You were probably missing this piece:
+
+❌ No automatic trigger exists unless you explicitly publish an event on load
+
+Aikau is not React/Vue — there is no componentDidMount.
+
+⸻
+
+💡 Cleaner alternative (if you want BEST practice)
+
+Instead of PublishService, you can also do:
+
+Option A (recommended in real projects)
+
+Use a tiny custom widget:
+
+postCreate: function () {
+   this.alfPublish("PAGE_LOAD");
+}
+
+⸻
+
+Option B (OOTB only)
+
+Use alfresco/services/PublishService (what I showed above)
+
+⸻
+
+🚀 If you still don’t see the call
+
+Check in DevTools:
+
+* Network tab → do you see /proxy/alfresco/...?
+* Console → any Aikau topic errors?
+* Confirm page model is actually loaded (wrong JS file is common issue)
+
+⸻
+
+If you want next level
+
+I can upgrade this for you to:
+
+* ￼ auto-load into a DataTable (not just label)
+* or ￼ call multiple Web Scripts in sequence
+* or ￼ pass parameters dynamically from URL
+
+Just tell me 👍
