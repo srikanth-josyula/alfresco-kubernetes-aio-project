@@ -1,89 +1,128 @@
-share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/xhr-demo.get.desc.xml
-
-<webscript>
-   <shortname>XHR Demo</shortname>
-   <description>XHR Demo</description>
-   <url>/xhr-demo</url>
-</webscript>
-
-⸻
-
-share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/xhr-demo.get.js
-
-model.jsonModel = {
-   services: [
-      {
-         name: "alfresco/services/Xhr"
-      }
-   ],
-   widgets: [
-      {
-         name: "example/widgets/HelloLoader"
-      }
-   ]
-};
-
-⸻
-
-share/src/main/resources/META-INF/js/example/widgets/HelloLoader.js
-
+aikau-xhr-service-widget-demo-share-1.0.jar\META-INF\resources\aikau-xhr-service-widget-demo-share\js\example\services\HelloService.js
 define([
    "dojo/_base/declare",
-   "dojo/_base/lang",
-   "alfresco/core/Core"
-], function(declare, lang, Core) {
-   return declare([Core], {
-      postCreate: function() {
-         this.inherited(arguments);
-         this.alfSubscribe(
-            "HELLO_SUCCESS",
-            lang.hitch(this, this.onSuccess)
-         );
-         this.alfPublish("ALF_XHR_REQUEST", {
-            url: "service/custom/hello",
-            method: "GET",
-            alfResponseTopic: "HELLO_SUCCESS"
-         });
+   "alfresco/services/BaseService",
+   "alfresco/core/CoreXhr",
+   "dojo/_base/lang"
+], function(declare, BaseService, AlfXhr, lang) {
+   return declare([BaseService, AlfXhr], {
+      registerSubscriptions: function() {
+         this.alfSubscribe("GET_HELLO_MESSAGE", lang.hitch(this, this.getHelloMessage));
       },
-      onSuccess: function(payload) {
-         console.log("HELLO_SUCCESS");
-         console.log(payload);
+      getHelloMessage: function(payload) {
+         var responseTopic = payload.alfResponseTopic || "GET_HELLO_MESSAGE";
+         var url = window.location.protocol + "//" + window.location.host +
+                   "/share/service/com/example/demo/get-message";
+         var config = {
+            alfTopic: responseTopic,
+            url: url,
+            method: "GET",
+            successCallback: this.onSuccess,
+            failureCallback: this.onFailure,
+            callbackScope: this
+         };
+         this.serviceXhr(config);
+      },
+      onSuccess: function(response, requestConfig) {
+         console.log("Service Success:", response);
+         this.alfPublish(requestConfig.alfTopic + "_SUCCESS", response);
+      },
+      onFailure: function(response, requestConfig) {
+         console.error("Service Error:", response);
+         this.alfPublish(requestConfig.alfTopic + "_FAILURE", response);
       }
    });
 });
 
-⸻
+aikau-xhr-service-widget-demo-share-1.0.jar\META-INF\resources\aikau-xhr-service-widget-demo-share\js\example\widgets\HelloWidget.js
+define([
+   "dojo/_base/declare",
+   "dojo/_base/lang",
+   "alfresco/core/Core",
+   "alfresco/html/Label"
+], function(declare, lang, Core, Label) {
+   return declare([Core], {
+      postCreate: function() {
+         this.inherited(arguments);
+         // ? Listen for response
+         this.alfSubscribe("GET_HELLO_MESSAGE_SUCCESS",
+            lang.hitch(this, this.updateMessage));
+         // ? Trigger service
+         this.alfPublish("GET_HELLO_MESSAGE", {
+            alfResponseTopic: "GET_HELLO_MESSAGE"
+         });
+      },
+      updateMessage: function(payload) {
+         var message = payload.message || "No message";
+         // ? Dynamically create label
+         this.messageLabel = new Label({
+            label: message
+         });
+         this.messageLabel.placeAt(this.domNode);
+      }
+   });
+});
 
-share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.desc.xml
+aikau-xhr-service-widget-demo-share-1.0.jar\alfresco\web-extension\site-data\extensions\aikau-xhr-service-widget-demo-share-example-widgets.xml
+<extension>
+  <modules>
+    <module>
+      <id>aikau-xhr-service-widget-demo-share</id>
+      <version>1.0</version>
+      <auto-deploy>true</auto-deploy>
 
+      <configurations>
+        <config evaluator="string-compare" condition="WebFramework" replace="false">
+          <web-framework>
+            <dojo-pages>
+              <packages>
+                <package 
+                  name="example" 
+                  location="resources/aikau-xhr-service-widget-demo-share/js/example"/>
+              </packages>
+            </dojo-pages>
+          </web-framework>
+        </config>
+      </configurations>
+
+    </module>
+  </modules>
+</extension>
+
+aikau-xhr-service-widget-demo-share-1.0.jar\alfresco\web-extension\site-webscripts\com\pages\simple-page.get.desc.xml
 <webscript>
-   <shortname>Hello</shortname>
-   <description>Hello World</description>
-   <url>/custom/hello</url>
-   <authentication>user</authentication>
-   <format default="json">json</format>
+    <shortname>Simple Page</shortname>
+    <description>Simple page definition</description>
+    <family>Share</family>
+    <url>/sample-xhr-service-demo</url>
 </webscript>
 
-⸻
+simple-page.get.html.ftl
+<@processJsonModel group="share"/>
 
-share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.js
-
-model.message = "hello world";
-
-⸻
-
-share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.json.ftl
-
-{
-   "message": "${message}"
-}
-
-⸻
-
-Access URL
-
-http://localhost:8080/share/page/xhr-demo
-
-Web Script URL
-
-http://localhost:8080/share/service/custom/hello
+simple-page.get.js
+model.jsonModel = {
+  services: [
+    {
+      name: "example/services/HelloService"
+    }
+  ],
+  widgets: [
+    {
+      name: "alfresco/layout/VerticalWidgets",
+      config: {
+        widgets: [
+          {
+            name: "alfresco/header/SetTitle",
+            config: {
+              title: "Hello Example"
+            }
+          },
+          {
+            name: "example/widgets/HelloWidget"
+          }
+        ]
+      }
+    }
+  ]
+};
