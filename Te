@@ -1,397 +1,89 @@
-Good — this is the right thing to build because once you understand this pattern, most Aikau problems stop being confusing.
-
-Below is a clean end-to-end working example of an Aikau + Web Script + XHR flow.
-
-⸻
-
-🧩 Goal
-
-On page load:
-
-1. Aikau calls Alfresco Web Script
-2. Web Script returns:
-
-{ "message": "hello world" }
-
-3. UI displays it in a label
-
-⸻
-
-1. 🔙 Web Script (Backend)
-
-📁 Folder structure
-
-alfresco/extension/templates/webscripts/com/example/demo/get-message.get.js
-alfresco/extension/templates/webscripts/com/example/demo/get-message.get.desc.xml
-alfresco/extension/templates/webscripts/com/example/demo/get-message.get.json.ftl
-
-⸻
-
-📄 Descriptor (.desc.xml)
+share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/xhr-demo.get.desc.xml
 
 <webscript>
-  <shortname>Get Message</shortname>
-  <description>Returns hello world JSON</description>
-  <url>/com/example/demo/get-message</url>
-  <format default="json">json</format>
-  <authentication>user</authentication>
+   <shortname>XHR Demo</shortname>
+   <description>XHR Demo</description>
+   <url>/xhr-demo</url>
 </webscript>
 
 ⸻
 
-📄 Controller (.get.js)
+share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/xhr-demo.get.js
+
+model.jsonModel = {
+   services: [
+      {
+         name: "alfresco/services/Xhr"
+      }
+   ],
+   widgets: [
+      {
+         name: "example/widgets/HelloLoader"
+      }
+   ]
+};
+
+⸻
+
+share/src/main/resources/META-INF/js/example/widgets/HelloLoader.js
+
+define([
+   "dojo/_base/declare",
+   "dojo/_base/lang",
+   "alfresco/core/Core"
+], function(declare, lang, Core) {
+   return declare([Core], {
+      postCreate: function() {
+         this.inherited(arguments);
+         this.alfSubscribe(
+            "HELLO_SUCCESS",
+            lang.hitch(this, this.onSuccess)
+         );
+         this.alfPublish("ALF_XHR_REQUEST", {
+            url: "service/custom/hello",
+            method: "GET",
+            alfResponseTopic: "HELLO_SUCCESS"
+         });
+      },
+      onSuccess: function(payload) {
+         console.log("HELLO_SUCCESS");
+         console.log(payload);
+      }
+   });
+});
+
+⸻
+
+share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.desc.xml
+
+<webscript>
+   <shortname>Hello</shortname>
+   <description>Hello World</description>
+   <url>/custom/hello</url>
+   <authentication>user</authentication>
+   <format default="json">json</format>
+</webscript>
+
+⸻
+
+share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.js
 
 model.message = "hello world";
 
 ⸻
 
-📄 Response template (.json.ftl)
+share/src/main/resources/alfresco/web-extension/site-webscripts/com/example/hello.get.json.ftl
 
 {
-  "message": "${message}"
+   "message": "${message}"
 }
 
 ⸻
 
-2. 🌐 Aikau Page (Frontend)
+Access URL
 
-📁 Page definition (JS)
+http://localhost:8080/share/page/xhr-demo
 
-share/WEB-INF/classes/alfresco/site-webscripts/pages/demo-page.get.js
+Web Script URL
 
-⸻
-
-📄 Full Aikau page model
-
-model.jsonModel = {
-  services: [
-    {
-      name: "alfresco/services/Xhr"
-    }
-  ],
-  widgets: [
-    {
-      name: "alfresco/layout/VerticalWidgets",
-      config: {
-        widgets: [
-          {
-            name: "alfresco/services/LoggingService"
-          },
-          {
-            name: "alfresco/buttons/AlfButton",
-            config: {
-              label: "Load Message",
-              publishTopic: "LOAD_MESSAGE"
-            }
-          },
-          {
-            name: "alfresco/html/Label",
-            config: {
-              label: "Waiting for response...",
-              subscriptionTopic: "MESSAGE_RECEIVED",
-              renderFilter: [
-                {
-                  property: "message",
-                  values: [""],
-                  negate: true
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  ]
-};
-
-⸻
-
-3. 🔌 XHR Service Wiring
-
-Now we wire the actual Web Script call.
-
-Add this to services section OR page model widgets:
-
-{
-  name: "alfresco/services/Xhr",
-  config: {
-    subscriptions: [
-      {
-        topic: "LOAD_MESSAGE",
-        url: "proxy/alfresco/com/example/demo/get-message",
-        method: "GET",
-        successTopic: "MESSAGE_RECEIVED"
-      }
-    ]
-  }
-}
-
-⸻
-
-4. 🔁 What happens (flow)
-
-Step 1
-
-User clicks button
-
-LOAD_MESSAGE
-
-Step 2
-
-XHR service catches it
-
-GET /share/proxy/alfresco/com/example/demo/get-message
-
-Step 3
-
-Response comes back:
-
-{ "message": "hello world" }
-
-Step 4
-
-Aikau publishes:
-
-MESSAGE_RECEIVED
-
-Step 5
-
-Label updates automatically
-
-⸻
-
-5. ⚠️ Common mistakes (this is likely your issue)
-
-❌ Using wrong URL
-
-Wrong:
-
-/alfresco/service/...
-
-Correct:
-
-/share/proxy/alfresco/...
-
-⸻
-
-❌ Expecting renderProperty to call API
-
-It will never call backend.
-
-⸻
-
-❌ Missing XHR service in page
-
-If service is not declared → nothing happens
-
-⸻
-
-❌ Topic mismatch
-
-If you publish:
-
-LOAD_MESSAGE
-
-But subscribe to:
-
-LOAD-MESSAGE
-
-→ nothing will fire
-
-⸻
-
-6. 🚀 Minimal version (if you want simplest possible)
-
-If you want even simpler:
-
-* Remove button
-* Auto-call on page load via small widget
-
-I can give you that version too.
-
-⸻
-
-If you’re stuck next
-
-If your real issue is still “call not firing”, send me:
-
-* your page .js
-* your Web Script URL
-* browser network screenshot (or description)
-
-I’ll pinpoint the exact break in 1 pass.
-
-
-Got it — you want the XHR call to fire automatically when the Aikau page loads, not via a button. That’s the correct production pattern.
-
-In Aikau, you don’t “run code on load” directly in most OOTB widgets — you publish an event immediately when the page initializes.
-
-Here’s the clean end-to-end way.
-
-⸻
-
-✅ Goal (on page load)
-
-* Page loads
-* XHR automatically calls Web Script
-* Response is shown in label
-
-⸻
-
-🔥 1. Web Script (same as before)
-
-Call it:
-
-/share/proxy/alfresco/com/example/demo/get-message
-
-Returns:
-
-{ "message": "hello world" }
-
-⸻
-
-⚙️ 2. Aikau Page (AUTO LOAD VERSION)
-
-This is the key part.
-
-✅ Full page model
-
-model.jsonModel = {
-  services: [
-    {
-      name: "alfresco/services/Xhr",
-      config: {
-        subscriptions: [
-          {
-            topic: "PAGE_LOAD",
-            url: "proxy/alfresco/com/example/demo/get-message",
-            method: "GET",
-            successTopic: "MESSAGE_RECEIVED"
-          }
-        ]
-      }
-    }
-  ],
-  widgets: [
-    {
-      name: "alfresco/layout/VerticalWidgets",
-      config: {
-        widgets: [
-          {
-            name: "alfresco/services/LoggingService"
-          },
-          // 👇 THIS triggers automatically on page load
-          {
-            name: "alfresco/services/PublishService",
-            config: {
-              publishTopic: "PAGE_LOAD"
-            }
-          },
-          // 👇 UI display
-          {
-            name: "alfresco/html/Label",
-            config: {
-              label: "Loading...",
-              subscriptionTopic: "MESSAGE_RECEIVED",
-              renderFilter: [
-                {
-                  property: "message",
-                  values: [""],
-                  negate: true
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  ]
-};
-
-⸻
-
-🧠 How it works (important)
-
-1. Page loads
-
-Aikau initializes all widgets
-
-⸻
-
-2. This runs immediately
-
-PublishService → PAGE_LOAD
-
-⸻
-
-3. XHR service catches it
-
-PAGE_LOAD → calls Web Script
-
-⸻
-
-4. Response comes back
-
-{ "message": "hello world" }
-
-⸻
-
-5. Event published
-
-MESSAGE_RECEIVED
-
-⸻
-
-6. Label updates automatically
-
-⸻
-
-⚠️ Key mistake people make
-
-You were probably missing this piece:
-
-❌ No automatic trigger exists unless you explicitly publish an event on load
-
-Aikau is not React/Vue — there is no componentDidMount.
-
-⸻
-
-💡 Cleaner alternative (if you want BEST practice)
-
-Instead of PublishService, you can also do:
-
-Option A (recommended in real projects)
-
-Use a tiny custom widget:
-
-postCreate: function () {
-   this.alfPublish("PAGE_LOAD");
-}
-
-⸻
-
-Option B (OOTB only)
-
-Use alfresco/services/PublishService (what I showed above)
-
-⸻
-
-🚀 If you still don’t see the call
-
-Check in DevTools:
-
-* Network tab → do you see /proxy/alfresco/...?
-* Console → any Aikau topic errors?
-* Confirm page model is actually loaded (wrong JS file is common issue)
-
-⸻
-
-If you want next level
-
-I can upgrade this for you to:
-
-* ￼ auto-load into a DataTable (not just label)
-* or ￼ call multiple Web Scripts in sequence
-* or ￼ pass parameters dynamically from URL
-
-Just tell me 👍
+http://localhost:8080/share/service/custom/hello
