@@ -1,3 +1,227 @@
+Good — this is the right thing to build because once you understand this pattern, most Aikau problems stop being confusing.
+
+Below is a clean end-to-end working example of an Aikau + Web Script + XHR flow.
+
+⸻
+
+🧩 Goal
+
+On page load:
+
+1. Aikau calls Alfresco Web Script
+2. Web Script returns:
+
+{ "message": "hello world" }
+
+3. UI displays it in a label
+
+⸻
+
+1. 🔙 Web Script (Backend)
+
+📁 Folder structure
+
+alfresco/extension/templates/webscripts/com/example/demo/get-message.get.js
+alfresco/extension/templates/webscripts/com/example/demo/get-message.get.desc.xml
+alfresco/extension/templates/webscripts/com/example/demo/get-message.get.json.ftl
+
+⸻
+
+📄 Descriptor (.desc.xml)
+
+<webscript>
+  <shortname>Get Message</shortname>
+  <description>Returns hello world JSON</description>
+  <url>/com/example/demo/get-message</url>
+  <format default="json">json</format>
+  <authentication>user</authentication>
+</webscript>
+
+⸻
+
+📄 Controller (.get.js)
+
+model.message = "hello world";
+
+⸻
+
+📄 Response template (.json.ftl)
+
+{
+  "message": "${message}"
+}
+
+⸻
+
+2. 🌐 Aikau Page (Frontend)
+
+📁 Page definition (JS)
+
+share/WEB-INF/classes/alfresco/site-webscripts/pages/demo-page.get.js
+
+⸻
+
+📄 Full Aikau page model
+
+model.jsonModel = {
+  services: [
+    {
+      name: "alfresco/services/Xhr"
+    }
+  ],
+  widgets: [
+    {
+      name: "alfresco/layout/VerticalWidgets",
+      config: {
+        widgets: [
+          {
+            name: "alfresco/services/LoggingService"
+          },
+          {
+            name: "alfresco/buttons/AlfButton",
+            config: {
+              label: "Load Message",
+              publishTopic: "LOAD_MESSAGE"
+            }
+          },
+          {
+            name: "alfresco/html/Label",
+            config: {
+              label: "Waiting for response...",
+              subscriptionTopic: "MESSAGE_RECEIVED",
+              renderFilter: [
+                {
+                  property: "message",
+                  values: [""],
+                  negate: true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+};
+
+⸻
+
+3. 🔌 XHR Service Wiring
+
+Now we wire the actual Web Script call.
+
+Add this to services section OR page model widgets:
+
+{
+  name: "alfresco/services/Xhr",
+  config: {
+    subscriptions: [
+      {
+        topic: "LOAD_MESSAGE",
+        url: "proxy/alfresco/com/example/demo/get-message",
+        method: "GET",
+        successTopic: "MESSAGE_RECEIVED"
+      }
+    ]
+  }
+}
+
+⸻
+
+4. 🔁 What happens (flow)
+
+Step 1
+
+User clicks button
+
+LOAD_MESSAGE
+
+Step 2
+
+XHR service catches it
+
+GET /share/proxy/alfresco/com/example/demo/get-message
+
+Step 3
+
+Response comes back:
+
+{ "message": "hello world" }
+
+Step 4
+
+Aikau publishes:
+
+MESSAGE_RECEIVED
+
+Step 5
+
+Label updates automatically
+
+⸻
+
+5. ⚠️ Common mistakes (this is likely your issue)
+
+❌ Using wrong URL
+
+Wrong:
+
+/alfresco/service/...
+
+Correct:
+
+/share/proxy/alfresco/...
+
+⸻
+
+❌ Expecting renderProperty to call API
+
+It will never call backend.
+
+⸻
+
+❌ Missing XHR service in page
+
+If service is not declared → nothing happens
+
+⸻
+
+❌ Topic mismatch
+
+If you publish:
+
+LOAD_MESSAGE
+
+But subscribe to:
+
+LOAD-MESSAGE
+
+→ nothing will fire
+
+⸻
+
+6. 🚀 Minimal version (if you want simplest possible)
+
+If you want even simpler:
+
+* Remove button
+* Auto-call on page load via small widget
+
+I can give you that version too.
+
+⸻
+
+If you’re stuck next
+
+If your real issue is still “call not firing”, send me:
+
+* your page .js
+* your Web Script URL
+* browser network screenshot (or description)
+
+I’ll pinpoint the exact break in 1 pass.
+
+
 Got it — you want the XHR call to fire automatically when the Aikau page loads, not via a button. That’s the correct production pattern.
 
 In Aikau, you don’t “run code on load” directly in most OOTB widgets — you publish an event immediately when the page initializes.
