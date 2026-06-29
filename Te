@@ -1,251 +1,91 @@
-Yes — but only if you follow the correct Aikau wiring exactly. I’ll give you a clean, minimal, working end-to-end project with no extra noise.
+Yes. Aikau has a built-in date control, so you can use a form with:
 
-Project: aikau-xhr-service-widget-demo-share
+* TextBox
+* From Date
+* To Date
+* Submit button
 
-⸻
-
-🧱 1. SHARE WEBSCRIPT (BACKEND)
-
-📄 doc-count.get.desc.xml
-
-<webscript>
-  <shortname>Doc Count</shortname>
-  <url>/com/example/doc-count</url>
-  <authentication>user</authentication>
-  <format default="json">json</format>
-</webscript>
-
-⸻
-
-📄 doc-count.get.js
-
-// Dummy logic (replace with repo search later)
-model.count = 42;
-
-⸻
-
-📄 doc-count.get.json.ftl
-
-{
-  "count": ${count}
-}
-
-⸻
-
-⚙️ 2. AIKAU PACKAGE REGISTRATION
-
-📄 aikau-extension.xml
-
-<extension>
-  <modules>
-    <module>
-      <id>aikau-xhr-service-widget-demo-share</id>
-      <version>1.0</version>
-      <auto-deploy>true</auto-deploy>
-      <configurations>
-        <config evaluator="string-compare" condition="WebFramework">
-          <web-framework>
-            <dojo-pages>
-              <packages>
-                <package
-                  name="example"
-                  location="aikau-xhr-service-widget-demo-share/js/example"/>
-              </packages>
-            </dojo-pages>
-          </web-framework>
-        </config>
-      </configurations>
-    </module>
-  </modules>
-</extension>
-
-⸻
-
-📄 3. AIKAU PAGE
-
-📄 dashboard.get.desc.xml
-
-<webscript>
-  <shortname>Dashboard</shortname>
-  <url>/xhr-dashboard</url>
-  <family>Share</family>
-</webscript>
-
-⸻
-
-📄 dashboard.get.html.ftl
-
-<@processJsonModel group="share"/>
-
-⸻
-
-📄 dashboard.get.js
+For example, in your dashboard.get.js:
 
 model.jsonModel = {
-  services: [
-    {
-      name: "example/services/DocCountService"
-    }
-  ],
-  widgets: [
-    {
-      name: "alfresco/layout/HorizontalWidgets",
-      config: {
-        widgets: [
-          // LEFT PANEL (30%)
-          {
-            name: "alfresco/layout/VerticalWidgets",
-            config: {
-              additionalCssClasses: "sidebar",
-              widgets: [
-                {
-                  name: "alfresco/forms/controls/TextBox",
+   widgets: [
+      {
+         name: "alfresco/layout/VerticalWidgets",
+         config: {
+            widgets: [
+               {
+                  name: "alfresco/forms/Form",
                   config: {
-                    fieldId: "site",
-                    label: "Site"
+                     okButtonLabel: "Submit",
+                     okButtonPublishTopic: "FORM_SUBMIT",
+                     widgets: [
+                        {
+                           name: "alfresco/forms/controls/TextBox",
+                           config: {
+                              name: "siteName",
+                              label: "Site Name"
+                           }
+                        },
+                        {
+                           name: "alfresco/forms/controls/DateTextBox",
+                           config: {
+                              name: "fromDate",
+                              label: "From Date"
+                           }
+                        },
+                        {
+                           name: "alfresco/forms/controls/DateTextBox",
+                           config: {
+                              name: "toDate",
+                              label: "To Date"
+                           }
+                        }
+                     ]
                   }
-                },
-                {
-                  name: "alfresco/forms/controls/TextBox",
-                  config: {
-                    fieldId: "from",
-                    label: "From Date"
-                  }
-                },
-                {
-                  name: "alfresco/forms/controls/TextBox",
-                  config: {
-                    fieldId: "to",
-                    label: "To Date"
-                  }
-                },
-                {
-                  name: "alfresco/buttons/AlfButton",
-                  config: {
-                    label: "Get Count",
-                    clickTopic: "DOC_COUNT_REQUEST"
-                  }
-                }
-              ]
-            }
-          },
-          // RIGHT PANEL (RESULT)
-          {
-            name: "alfresco/html/Label",
-            config: {
-              label: "Waiting for result..."
-            }
-          }
-        ]
+               },
+               {
+                  name: "example/widgets/HelloWidget"
+               }
+            ]
+         }
       }
-    }
-  ]
+   ]
 };
 
-⸻
-
-⚙️ 4. SERVICE (XHR LAYER)
-
-📄 DocCountService.js
+Then your HelloWidget.js can simply subscribe:
 
 define([
-  "dojo/_base/declare",
-  "alfresco/services/BaseService",
-  "alfresco/core/CoreXhr",
-  "dojo/_base/lang"
-], function(declare, BaseService, CoreXhr, lang) {
-  return declare([BaseService, CoreXhr], {
-    registerSubscriptions: function() {
-      this.alfSubscribe(
-        "DOC_COUNT_REQUEST",
-        lang.hitch(this, this.getCount)
-      );
-    },
-    getCount: function(payload) {
-      var url = "/share/service/com/example/doc-count"
-        + "?site=" + payload.site
-        + "&from=" + payload.from
-        + "&to=" + payload.to;
-      this.serviceXhr({
-        url: url,
-        method: "GET",
-        alfTopic: "DOC_COUNT",
-        successCallback: this.onSuccess,
-        failureCallback: this.onFailure,
-        callbackScope: this
-      });
-    },
-    onSuccess: function(response, config) {
-      this.alfPublish("DOC_COUNT_SUCCESS", response);
-    },
-    onFailure: function(err) {
-      console.error("Error:", err);
-    }
-  });
+   "dojo/_base/declare",
+   "dojo/_base/lang",
+   "alfresco/core/Core"
+], function(declare, lang, Core) {
+   return declare([Core], {
+      postCreate: function() {
+         this.inherited(arguments);
+         this.alfSubscribe(
+            "FORM_SUBMIT",
+            lang.hitch(this, this.onSubmit)
+         );
+      },
+      onSubmit: function(payload) {
+         console.log("Payload:", payload);
+         console.log("Site:", payload.siteName);
+         console.log("From:", payload.fromDate);
+         console.log("To:", payload.toDate);
+      }
+   });
 });
 
-⸻
+When the user submits the form, you’ll receive a payload similar to:
 
-🚀 HOW IT WORKS
+{
+   siteName: "marketing",
+   fromDate: "2026-06-01",
+   toDate: "2026-06-30"
+}
 
-Flow:
+This is a good next step because once you can receive the form values in your widget, replacing the console.log with:
 
-User opens /xhr-dashboard
-        ↓
-Aikau page loads
-        ↓
-Service registers subscription
-        ↓
-User fills form
-        ↓
-Clicks "Get Count"
-        ↓
-DOC_COUNT_REQUEST
-        ↓
-DocCountService calls Share WebScript
-        ↓
-Response: {count: 42}
-        ↓
-DOC_COUNT_SUCCESS
+this.alfPublish("DOC_COUNT_REQUEST", payload);
 
-⸻
-
-⚠️ CRITICAL DEPLOYMENT RULES
-
-If anything fails:
-
-1. JAR path MUST be:
-
-META-INF/resources/aikau-xhr-service-widget-demo-share/js/example/
-
-2. Package MUST match:
-
-name="example"
-location="aikau-xhr-service-widget-demo-share/js/example"
-
-3. URL MUST work:
-
-/share/service/com/example/doc-count
-
-⸻
-
-🧠 IMPORTANT TRUTH
-
-This version works because:
-
-* ❌ no custom widget complexity
-* ❌ no manual DOM manipulation
-* ✔ pure Aikau JSON model
-* ✔ correct service subscription pattern
-* ✔ correct Share WebScript endpoint
-
-⸻
-
-If you want next upgrade, I can convert this into:
-
-* 📅 real date picker (not textbox)
-* 📊 table/grid result instead of alert
-* 🔄 auto-refresh dashboard
-* ⚡ direct repo CMIS query (no Share WebScript needed)
-
-Just tell me.
+lets your service receive exactly the same payload and call your Share Web Script.
